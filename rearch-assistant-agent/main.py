@@ -4,11 +4,11 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_classic.agents import create_react_agent, AgentExecutor 
-from tools import search_tool
+from tools import search_tool, wiki_tool, save_tool
 
 load_dotenv()
 
-# class which will specify type of content that we want our LLM to return
+# class which will specify type of content that I want our LLM to return
 class ResearchResponse(BaseModel):
     topic: str
     summary: str
@@ -51,8 +51,8 @@ Thought: {agent_scratchpad}
     format_instructions=parser.get_format_instructions()
 )
 
-# search tool
-tools = [search_tool]
+# search tool list
+tools = [search_tool, wiki_tool, save_tool]
 
 # agent setup
 agent = create_react_agent(
@@ -61,7 +61,13 @@ agent = create_react_agent(
     tools = tools,  
 )
 
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+agent_executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    verbose=True,
+    handle_parsing_errors=True
+)
+
 query = input("What can i help you research today? ")
 raw_response = agent_executor.invoke({"input": query})
 # print(raw_response)
