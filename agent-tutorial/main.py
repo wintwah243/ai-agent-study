@@ -1,9 +1,10 @@
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain_classic.agents import create_tool_calling_agent, AgentExecutor 
+from langchain_classic.agents import create_react_agent, AgentExecutor 
+from tools import search_tool
 
 load_dotenv()
 
@@ -26,35 +27,48 @@ llm = ChatGroq(model="llama-3.3-70b-versatile")
 parser = PydanticOutputParser(pydantic_object=ResearchResponse)
 
 # prompt template setup
-prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
-            You are a research assistant that will help generate a research paper.
-            Answer the user query and use necessary tools to gather information.
-            Wrap the output in this format and provide on other text\n{format_instructions}
-            """,
-        ),
-        ("placeholder", "{chat_history}"),
-        ("human", "{query}"),
-        ("placeholder", "{agent_scratchpad}"),
-    ]
-).partial(format_instructions=parser.get_format_instructions())
+prompt = PromptTemplate.from_template("""
+You are a research assistant that helps generate structured research responses.
 
-# agent setup
-agent = create_tool_calling_agent(
-    llm = llm,
-    prompt = prompt,
-    tools = [],  
+You have access to the following tools:
+{tools}
+
+Use this format:
+
+Question: {input}
+Thought: think about what to do
+Action: one of [{tool_names}]
+Action Input: input for the tool
+Observation: tool result
+... (repeat Thought/Action/Observation if needed)
+Thought: I now know the final answer
+Final Answer: return the final answer in this format:
+{format_instructions}
+
+Question: {input}
+Thought: {agent_scratchpad}
+""").partial(
+    format_instructions=parser.get_format_instructions()
 )
 
-agent_executor = AgentExecutor(agent=agent, tools=[], verbose=True)
-raw_response = agent_executor.invoke({"query": "What is the capital of France?"})
+# search tool
+tools = [search_tool]
+
+# agent setup
+agent = create_react_agent(
+    llm = llm,
+    prompt = prompt,
+    tools = tools,  
+)
+
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+query = input("What can i help you research today? ")
+raw_response = agent_executor.invoke({"input": query})
 # print(raw_response)
 
 try:
     structured_response = parser.parse(raw_response.get("output"))
+    print(structured_response)
 except Exception as e:
     print("Error parsing response:", e, "\nRaw response was: ", raw_response)
 
